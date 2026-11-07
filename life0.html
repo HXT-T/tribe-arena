@@ -1,0 +1,566 @@
+<title>族群竞技场</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: design bench on top (your tribe), arena dish + tribe sheets in the middle, test bench below */
+:root{
+  --bg:#eef2ee; --panel:#fbfcfa; --ink:#18221d; --muted:#5d6b63; --line:#d3dbd5;
+  --accent:#2f7d5b; --warn:#b5532f; --dish:#0d1714; --soft:#e3ebe5;
+  --font-body:"Noto Sans SC",system-ui,sans-serif; --font-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1512; --panel:#16201b; --ink:#e3ebe5; --muted:#93a39a; --line:#2a3731; --accent:#6cc79b; --warn:#e88a63; --soft:#1d2a24; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1512; --panel:#16201b; --ink:#e3ebe5; --muted:#93a39a; --line:#2a3731; --accent:#6cc79b; --warn:#e88a63; --soft:#1d2a24; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font-weight:900;font-size:clamp(26px,4vw,38px);margin:0;letter-spacing:.02em;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted);max-width:76ch}
+.rules{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding:0;list-style:none}
+.rules li{font-size:13px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 12px}
+.rules b{color:var(--accent);font-family:var(--font-mono);margin-right:6px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:1fr}}
+.stage{display:flex;flex-direction:column;gap:10px;min-width:0}
+canvas#world{width:100%;aspect-ratio:3/2;max-width:100%;border-radius:10px;background:var(--dish);display:block;cursor:crosshair}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select,input{font:inherit;font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 9px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:700}
+button.icon{padding:2px 7px;font-size:12px}
+.tick{font-family:var(--font-mono);font-size:13px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+label.chk{font-size:13px;display:flex;gap:5px;align-items:center;color:var(--muted)}
+aside{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sp{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.sp.mine{border-color:var(--accent);border-width:2px}
+.sp-head{display:flex;align-items:center;gap:8px}
+.dot{width:14px;height:14px;border-radius:50%;flex:none;display:inline-block}
+.sp-name{font-weight:900;font-size:16px}
+.sp-kind{font-size:12px;color:var(--muted)}
+.sp-num{margin-left:auto;font-family:var(--font-mono);font-size:12px;font-variant-numeric:tabular-nums;text-align:right;line-height:1.35}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%}
+.rl{margin:0;padding:0;list-style:none;font-size:12.5px;display:flex;flex-direction:column;gap:2px}
+.rl li{display:flex;gap:6px}
+.rl .n{font-family:var(--font-mono);color:var(--muted);width:16px;flex:none}
+.rl .h{margin-left:auto;font-family:var(--font-mono);color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.rl li.on{color:var(--accent);font-weight:700}
+.sub{font-size:11.5px;color:var(--muted);letter-spacing:.06em;margin-top:2px}
+.extinct{opacity:.45}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.card h2{font-size:15px;margin:0 0 8px;font-weight:900}
+#log{font-size:12.5px;max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+#log .t{font-family:var(--font-mono);color:var(--muted);margin-right:6px}
+#follow{font-size:13px}
+#follow .k{color:var(--muted)}
+canvas#chart{width:100%;height:150px;display:block}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:900px){.lower{grid-template-columns:1fr}}
+table{border-collapse:collapse;font-size:13px;width:100%;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:500}
+.tbl{overflow-x:auto}
+.prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0}
+.prog i{display:block;height:100%;width:0;background:var(--accent)}
+.note{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.flag{color:var(--warn);font-weight:700}
+/* editor */
+.editor{border:2px solid var(--accent)}
+.ed-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){.ed-grid{grid-template-columns:1fr}}
+.ed-col{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ed-col h3{font-size:13.5px;margin:4px 0 0;font-weight:900}
+.ed-col .hint{font-size:12px;color:var(--muted);margin:0}
+.row{display:flex;flex-wrap:wrap;gap:5px;align-items:center;background:var(--soft);border-radius:7px;padding:5px 7px}
+.row .n{font-family:var(--font-mono);font-size:12px;color:var(--muted);width:16px}
+.row .w{font-size:12px;color:var(--muted)}
+.row input[type=number]{width:58px}
+.row .tail{margin-left:auto;display:flex;gap:3px}
+.params{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.params input[type=range]{width:110px}
+.params output{font-family:var(--font-mono);font-size:12px;min-width:22px}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>族群竞技场</h1>
+  <p>你设计一个族群的性格：成员怎么觅食、逃命、围猎、回巢，巢穴什么时候孵化、建什么设施。然后放进竞技场，和其他族群在同一套规则下较量。拥有体量最多的族群获胜。</p>
+  <ul class="rules">
+    <li><b>1</b>体型就是能量：吃东西变大，活着慢慢变小</li>
+    <li><b>2</b>越大越慢，但看得越远</li>
+    <li><b>3</b>大吃小：大 15% 以上，碰到就吃掉；但越大越吃不下，体量 40 就撑满了</li>
+    <li><b>4</b>得分 = 族群拥有的全部体量：巢里储量 + 成员 + 设施</li>
+    <li><b>5</b>只能用巢里的储量孵化、建设施；敌人碰到你的巢会偷走储量，除非有自己人在家</li>
+    <li><b>6</b>设施也是体量：比它大的敌人能吃掉它</li>
+    <li><b>7</b>在自己领地里耗能减半</li>
+  </ul>
+</header>
+
+<div class="card editor" id="editor">
+  <h2>设计你的族群</h2>
+  <div class="controls" style="margin-bottom:10px">
+    <label class="chk">名字 <input id="edName" maxlength="6" style="width:90px"></label>
+    <label class="chk">颜色 <select id="edColor"></select></label>
+    <label class="chk">从预设开始 <select id="edTpl"></select></label>
+    <button id="edLoad">载入</button>
+    <span style="flex:1"></span>
+    <button id="edPlay" class="primary">上场观战</button>
+    <button id="edTest">测试强度</button>
+  </div>
+  <div class="ed-grid">
+    <div class="ed-col">
+      <h3>成员性格</h3>
+      <p class="hint">每个成员每一刻从上往下检查，执行第一条条件成立的规则。最多 8 条。</p>
+      <div id="edRules"></div>
+      <div><button id="edAddRule">＋ 加一条规则</button></div>
+      <div class="params">
+        <label class="chk">携带线 <input type="range" id="edCarry" min="12" max="40"><output id="oCarry"></output></label>
+        <label class="chk">回巢后保留 <input type="range" id="edKeep" min="8" max="16"><output id="oKeep"></output></label>
+      </div>
+      <p class="hint">体型达到携带线就算"吃饱了"；回巢时把超过"保留"的体量存进巢里。</p>
+    </div>
+    <div class="ed-col">
+      <h3>巢穴决策</h3>
+      <p class="hint">每 20 刻检查一次，执行第一条条件成立的；储量不够就等着攒。最多 5 条。</p>
+      <div id="edNest"></div>
+      <div><button id="edAddNest">＋ 加一条决策</button></div>
+      <p class="hint">价格：孵化 14 · 农田 30 · 墙 15 · 哨塔 25 · 前哨 40</p>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="stage">
+    <canvas id="world" width="960" height="640" aria-label="竞技场"></canvas>
+    <div class="controls">
+      <button id="play" class="primary">暂停</button>
+      <select id="speed" aria-label="速度">
+        <option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option><option value="10">10×</option><option value="30">30×</option>
+      </select>
+      <select id="roster" aria-label="对局">
+        <option value="mine" selected>你的族群 vs 三个预设</option><option value="presets">四个预设</option>
+      </select>
+      <button id="reset">新一局</button>
+      <label class="chk">种子 <input id="seed" type="number" value="7" style="width:68px"></label>
+      <label class="chk"><input id="showIntent" type="checkbox" checked> 意图</label>
+      <label class="chk"><input id="showSense" type="checkbox"> 视野</label>
+      <span class="tick" id="tick">t=0</span>
+    </div>
+    <div class="card">
+      <h2>得分走势</h2>
+      <canvas id="chart" aria-label="各族群得分随时间变化"></canvas>
+    </div>
+  </div>
+  <aside>
+    <div id="species"></div>
+    <div class="card"><h2>跟随个体</h2><div id="follow"><span class="k">点击场上任意个体，跟随它。</span></div></div>
+    <div class="card"><h2>战报</h2><div id="log"></div></div>
+  </aside>
+</div>
+
+<div class="lower">
+  <div class="card">
+    <h2>批量测试（当前对局阵容）</h2>
+    <div class="controls">
+      <label class="chk">每组种子 <input id="tSeeds" type="number" value="5" min="1" max="40" style="width:60px"></label>
+      <label class="chk">时长 <input id="tTicks" type="number" value="3000" step="500" min="500" style="width:80px"></label>
+      <button id="tRun" class="primary">开始测试</button>
+    </div>
+    <div class="prog"><i id="tProg"></i></div>
+    <div id="tStatus" class="note">对称出生点，换多个种子。分数 = 族群全部体量（储量 + 成员 + 设施）占全场的比例，按时间累计。</div>
+    <div class="tbl" id="tAll"></div>
+  </div>
+  <div class="card">
+    <h2>两两对决矩阵</h2>
+    <div class="tbl" id="tPair"><p class="note">每格是行族群对列族群时，行族群的累计得分占比。高于 50% 说明行克列。</p></div>
+    <div id="tFlags" class="note"></div>
+  </div>
+</div>
+</div>
+
+<script>
+"use strict";
+// ================= world rules (deterministic) =================
+const W=960,H=640,CELL=64,GC=W/CELL,GR=H/CELL;
+const FOOD=1.5,EAT_RATIO=1.15,EFF=0.9,MIN_M=4,MAXPOP=420,TRIBE_CAP=30;
+const NEST_R=14,START_STORE=60,START_N=3,START_M=12,HATCH_M=12,NEST_EVERY=20;
+let RAID=0.6;
+const GUARD_R=30;
+// satiation: full absorption up to SAT_LO, falling to nothing at SAT_HI
+let SAT_LO=20,SAT_HI=40;
+const absorb=m=>Math.max(0,Math.min(1,(SAT_HI-m)/(SAT_HI-SAT_LO)));
+let SPOTS=320,CENTER_SPOTS=140,CENTER_R=110,REGROW=400,FARM_SPOTS=6,FARM_REGROW=300,HOME_K=0.5;
+const COST={hatch:14,farm:30,wall:15,tower:25,outpost:40};
+const FAC={farm:{r:8},wall:{r:10},tower:{r:7,range:150},outpost:{r:10}};
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rad=m=>1.8*Math.sqrt(m), sen=r=>60+2.5*r;
+let spd=r=>3.2/(1+r/8);
+// upkeep is proportional to mass; moving fast costs extra
+let upkeep=(m,v)=>0.0006*m+0.0004*m*v*v;
+const terrR=store=>Math.min(200,50+5*Math.sqrt(Math.max(0,store)));
+
+// ================= personality vocabulary =================
+const MCOND={threat:'大敌靠近',prey:'看到猎物',food:'看到食物',loaded:'吃饱了',kinHunt:'同伴在追猎',kinDanger:'同伴遇险',
+  intruder:'有敌入侵领地',home:'在自己领地里',nearest:'我离巢最近',big:'我是大个子',small:'我是小个子',alone:'落单',crowded:'同伴很多'};
+const MACT={flee:'逃跑',chase:'追猎',eat:'吃食物',return:'回巢存放',assist:'协助围猎',guard:'救援同伴',defend:'回防',raid:'袭击敌巢',
+  patrol:'领地巡逻',guardNest:'看家',gather:'向同伴靠拢',spread:'散开',wander:'游荡',rest:'休息'};
+const NEED={flee:'threat',chase:'prey',eat:'food',assist:'kinHunt',guard:'kinDanger',defend:'intruder'};
+const INTENT={flee:'逃',chase:'追',eat:'吃',return:'回',assist:'援',guard:'救',defend:'守',raid:'袭',patrol:'巡',guardNest:'看',gather:'聚',spread:'散',wander:'游',rest:'歇'};
+const NCOND={storeOver:'储量 ≥',membersUnder:'成员 <',farmsUnder:'农田 <',wallsUnder:'墙 <',towersUnder:'哨塔 <',outpostsUnder:'前哨 <',intruder:'有敌入侵'};
+const NACT={hatch:'孵化成员',farm:'建农田',wall:'建墙',tower:'建哨塔',outpost:'建前哨'};
+const R=(c,a,label)=>({if:c,do:a,label}), N=(c,a,label)=>({if:c,do:a,label});
+
+const PRESETS=[
+ {name:'狼群',style:'掠夺',color:'#f0704f',carry:30,keep:12,
+  rules:[R(['threat'],'flee','大敌靠近就逃'),R(['big'],'raid','大个子去偷敌巢'),R(['loaded'],'return','吃饱了就回巢'),R(['kinHunt'],'assist','同伴在追就围上去'),R(['prey'],'chase','看到猎物就追'),R(['food'],'eat','吃食物'),R([],'raid','没事就去偷敌巢')],
+  nest:[N([['membersUnder',10]],'hatch','成员少于 10 就孵化')]},
+ {name:'蜂群',style:'扩张',color:'#e8c74a',carry:18,keep:10,
+  rules:[R(['threat'],'flee','大敌靠近就逃'),R(['loaded'],'return','吃饱了就回巢'),R(['food'],'eat','吃食物'),R(['crowded'],'spread','太挤就散开'),R([],'wander','四处游荡')],
+  nest:[N([['outpostsUnder',1],['storeOver',60]],'outpost','攒够了建一个前哨'),N([['membersUnder',16]],'hatch','孵化到 16 名')]},
+ {name:'农夫',style:'经营',color:'#9bd96e',carry:20,keep:11,
+  rules:[R(['threat'],'flee','大敌靠近就逃'),R(['loaded'],'return','吃饱了就回巢'),R(['food'],'eat','吃食物'),R([],'patrol','在领地里巡逻')],
+  nest:[N([['membersUnder',5]],'hatch','先保证 5 名成员'),N([['farmsUnder',3],['storeOver',40]],'farm','攒到 40 就建农田，共 3 块'),N([['membersUnder',10]],'hatch','再孵化到 10 名')]},
+ {name:'象群',style:'防守',color:'#5cb6e0',carry:24,keep:12,
+  rules:[R(['intruder','big'],'defend','有敌入侵，大个子回防'),R(['threat'],'flee','大敌靠近就逃'),R(['loaded'],'return','吃饱了就回巢'),R(['prey','big'],'chase','大个子顺手捕猎'),R(['food'],'eat','吃食物'),R([],'wander','四处游荡')],
+  nest:[N([['wallsUnder',3]],'wall','先围 3 堵墙'),N([['membersUnder',8]],'hatch','成员少于 8 就孵化'),N([['towersUnder',1]],'tower','建一座哨塔')]},
+];
+
+class World{
+  constructor(seed,tribes){
+    this.T=tribes;this.r=rng(seed*9973+17);this.t=0;this.cs=[];this.ps=[];this.fs=[];this.nextId=1;this.events=[];
+    this.st=tribes.map(()=>({upkeep:0,food:0,deposit:0,stolen:0,lost:0,kill:0,eaten:0,spend:0,wreck:0}));this.hits=tribes.map(s=>s.rules.map(()=>0));this.nhits=tribes.map(s=>s.nest.map(()=>0));
+    const n=tribes.length,slots=n===2?[[W/2-330,H/2-210],[W/2+330,H/2+210]]:[[W/2-330,H/2-210],[W/2+330,H/2-210],[W/2+330,H/2+210],[W/2-330,H/2+210]];
+    const off=Math.floor(this.r()*slots.length);
+    this.nests=tribes.map((tr,i)=>{const s=slots[(i+off)%slots.length];return{tid:i,x:s[0],y:s[1],store:START_STORE,alive:true}});
+    this.spots=[];for(let i=0;i<SPOTS;i++)this.addSpot(this.r()*W,this.r()*H,REGROW,null);
+    for(let i=0;i<CENTER_SPOTS;i++){const u=Math.max(1e-9,this.r()),v=this.r(),d=Math.sqrt(-2*Math.log(u))*CENTER_R;this.addSpot(W/2+Math.cos(v*6.283)*d,H/2+Math.sin(v*6.283)*d*0.8,REGROW,null)}
+    for(const sp of this.spots)sp.next=Math.floor(this.r()*REGROW);
+    this.nests.forEach(ns=>{for(let j=0;j<START_N;j++){const a=this.r()*6.283;this.cs.push(this.make(ns.tid,ns.x+Math.cos(a)*30,ns.y+Math.sin(a)*30,START_M))}});
+  }
+  make(tid,x,y,m){return{id:this.nextId++,tid,x:Math.min(W-1,Math.max(1,x)),y:Math.min(H-1,Math.max(1,y)),vx:0,vy:0,hd:this.r()*6.283,m,dead:false,act:'wander',rule:-1,born:this.t,stored:0,kills:0,danger:null,target:null}}
+  addSpot(x,y,regrow,farm){this.spots.push({x:Math.min(W-3,Math.max(3,x)),y:Math.min(H-3,Math.max(3,y)),regrow,farm,food:false,next:this.t+regrow})}
+  growFood(x,y){this.ps.push({x:Math.min(W-2,Math.max(2,x)),y:Math.min(H-2,Math.max(2,y)),v:FOOD,dead:false,spot:null})}
+  grid(list){const g=new Array(GC*GR);for(let i=0;i<g.length;i++)g[i]=[];
+    for(const o of list){if(o.dead)continue;g[Math.min(GR-1,Math.floor(o.y/CELL))*GC+Math.min(GC-1,Math.floor(o.x/CELL))].push(o)}return g}
+  near(g,x,y,Rr,fn){const cr=Math.ceil(Rr/CELL),gx=Math.floor(x/CELL),gy=Math.floor(y/CELL);
+    for(let yy=Math.max(0,gy-cr);yy<=Math.min(GR-1,gy+cr);yy++)for(let xx=Math.max(0,gx-cr);xx<=Math.min(GC-1,gx+cr);xx++)
+      for(const o of g[yy*GC+xx]){if(o.dead)continue;const ex=o.x-x,ey=o.y-y,d2=ex*ex+ey*ey;if(d2<=Rr*Rr)fn(o,ex,ey,d2)}}
+  // territory = circles around nest and outposts
+  terr(tid){const ns=this.nests[tid],rr=terrR(ns.store),out=[[ns.x,ns.y,rr]];for(const f of this.fs)if(f.tid===tid&&f.type==='outpost'&&!f.dead)out.push([f.x,f.y,rr*0.6]);return out}
+  inTerr(tid,x,y){for(const [a,b,rr] of this.terrs[tid])if((x-a)**2+(y-b)**2<=rr*rr)return true;return false}
+  facCount(tid,type){let k=0;for(const f of this.fs)if(f.tid===tid&&f.type===type&&!f.dead)k++;return k}
+  build(tid,type){
+    const ns=this.nests[tid],rr=terrR(ns.store),k=this.facCount(tid,type),toC=Math.atan2(H/2-ns.y,W/2-ns.x);
+    let a,d;
+    if(type==='wall'){a=toC+(k-1.5)*0.75;d=48}
+    else if(type==='tower'){a=toC+(k%2?0.9:-0.9)*Math.ceil(k/2);d=rr*0.75}
+    else if(type==='outpost'){a=toC+(k%2?0.8:-0.8);d=180}
+    else{a=this.r()*6.283;d=rr*(0.45+0.35*this.r())}
+    const fac={tid,type,x:Math.min(W-12,Math.max(12,ns.x+Math.cos(a)*d)),y:Math.min(H-12,Math.max(12,ns.y+Math.sin(a)*d)),m:COST[type],dead:false};this.fs.push(fac);
+    if(type==='farm')for(let i=0;i<FARM_SPOTS;i++){const b=i*6.283/FARM_SPOTS,q=16+10*(i%2);this.addSpot(fac.x+Math.cos(b)*q,fac.y+Math.sin(b)*q,FARM_REGROW,fac)}
+    this.log('build',{tid},null,type);
+  }
+  nestThink(){
+    this.T.forEach((tr,tid)=>{const ns=this.nests[tid];if(!ns.alive)return;
+      const members=this.cs.filter(c=>c.tid===tid).length;
+      const val={storeOver:a=>ns.store>=a,membersUnder:a=>members<a,farmsUnder:a=>this.facCount(tid,'farm')<a,wallsUnder:a=>this.facCount(tid,'wall')<a,
+        towersUnder:a=>this.facCount(tid,'tower')<a,outpostsUnder:a=>this.facCount(tid,'outpost')<a,intruder:()=>this.intr[tid].length>0};
+      for(let i=0;i<tr.nest.length;i++){const ru=tr.nest[i];
+        if(!ru.if.every(([k,a])=>val[k](a)))continue;
+        if(ru.do==='hatch'&&(members>=TRIBE_CAP||this.cs.length>=MAXPOP))continue;
+        if(ns.store>=COST[ru.do]){ns.store-=COST[ru.do];this.st[tid].spend+=COST[ru.do];this.nhits[tid][i]++;
+          if(ru.do==='hatch'){const a=this.r()*6.283;this.cs.push(this.make(tid,ns.x+Math.cos(a)*(NEST_R+6),ns.y+Math.sin(a)*(NEST_R+6),HATCH_M))}else this.build(tid,ru.do)}
+        break;}
+    });
+  }
+  step(){
+    this.t++;
+    // food grows back on fixed spots after it is eaten
+    for(const sp of this.spots){if(sp.food||this.t<sp.next||(sp.farm&&sp.farm.dead))continue;sp.food=true;this.ps.push({x:sp.x,y:sp.y,v:FOOD,dead:false,spot:sp})}
+    this.terrs=this.T.map((_,i)=>this.terr(i));
+    // intruders: enemies inside territory or tower range
+    this.intr=this.T.map(()=>[]);
+    for(const c of this.cs)this.T.forEach((_,tid)=>{if(tid===c.tid||!this.nests[tid].alive)return;
+      let seen=this.inTerr(tid,c.x,c.y);if(!seen)for(const f of this.fs)if(f.tid===tid&&f.type==='tower'&&!f.dead&&(c.x-f.x)**2+(c.y-f.y)**2<=FAC.tower.range**2){seen=true;break}
+      if(seen)this.intr[tid].push(c)});
+    if(this.t%NEST_EVERY===1)this.nestThink();
+    // who is closest to its own nest, and which nests have a guard at home
+    this.nearest=this.T.map(()=>null);const nd=this.T.map(()=>1e18);this.guarded=this.T.map(()=>false);
+    for(const c of this.cs){const ns=this.nests[c.tid],d=(c.x-ns.x)**2+(c.y-ns.y)**2;if(d<nd[c.tid]){nd[c.tid]=d;this.nearest[c.tid]=c.id}if(d<(NEST_R+GUARD_R)**2)this.guarded[c.tid]=true}
+    const gc=this.grid(this.cs),gp=this.grid(this.ps);
+    const sum=this.T.map(()=>0),cnt=this.T.map(()=>0);for(const c of this.cs){sum[c.tid]+=c.m;cnt[c.tid]++}
+    const avg=sum.map((s,i)=>cnt[i]?s/cnt[i]:0);
+    for(const c of this.cs){
+      if(c.dead)continue;
+      const tr=this.T[c.tid],ns=this.nests[c.tid],r=rad(c.m),S=sen(r);
+      let threat=null,td=1e18,prey=null,pd=1e18,food=null,fd=1e18,kin=0,kx=0,ky=0,hunt=null,hdist=1e18,danger=null,dd=1e18;
+      this.near(gc,c.x,c.y,S,(o,ex,ey,d2)=>{
+        if(o===c)return;const ro=rad(o.m);
+        if(o.tid===c.tid){kin++;kx+=ex;ky+=ey;
+          if(o.target&&!o.target.dead&&d2<hdist){hdist=d2;hunt=o.target}
+          if(o.danger&&!o.danger.dead&&d2<dd){dd=d2;danger={foe:o.danger,ex,ey}}return}
+        if(ro>=EAT_RATIO*r&&d2<td){td=d2;threat={o,ex,ey}}
+        if(r>=EAT_RATIO*ro&&d2<pd){pd=d2;prey={o,ex,ey}}
+      });
+      this.near(gp,c.x,c.y,S,(p,ex,ey,d2)=>{if(d2<fd){fd=d2;food={ex,ey,p}}});
+      const canEat=o=>r>=EAT_RATIO*rad(o.m), home=this.inTerr(c.tid,c.x,c.y);
+      const cond={threat:!!threat,prey:!!prey,food:!!food,loaded:c.m>=tr.carry,kinHunt:!!hunt&&canEat(hunt),kinDanger:!!danger,
+        intruder:this.intr[c.tid].length>0,home,nearest:this.nearest[c.tid]===c.id,big:c.m>=1.3*avg[c.tid],small:c.m<=0.7*avg[c.tid],alone:kin===0,crowded:kin>=3};
+      let ri=tr.rules.length-1;
+      for(let i=0;i<tr.rules.length;i++){const ru=tr.rules[i];if(ru.if.every(k=>cond[k])&&(!NEED[ru.do]||cond[NEED[ru.do]])){ri=i;break}}
+      let act=tr.rules[ri].do;if(NEED[act]&&!cond[NEED[act]])act='wander';
+      c.act=act;c.rule=ri;this.hits[c.tid][ri]++;c.danger=threat?threat.o:null;c.target=null;
+      let dx=Math.cos(c.hd),dy=Math.sin(c.hd),th=0.5;
+      const aim=(ex,ey,s)=>{const L=Math.hypot(ex,ey)||1;dx=s*ex/L;dy=s*ey/L};
+      const toward=(x,y)=>aim(x-c.x,y-c.y,1);
+      const roam=()=>{c.hd+=(this.r()-.5)*0.5;dx=Math.cos(c.hd);dy=Math.sin(c.hd)};
+      if(act==='flee'){aim(threat.ex,threat.ey,-1);th=1}
+      else if(act==='chase'){aim(prey.ex,prey.ey,1);th=1;c.target=prey.o}
+      else if(act==='assist'){toward(hunt.x,hunt.y);th=1;c.target=hunt}
+      else if(act==='guard'){if(canEat(danger.foe)){toward(danger.foe.x,danger.foe.y);c.target=danger.foe}else aim(danger.ex,danger.ey,1);th=1}
+      else if(act==='defend'){let best=null,bd=1e18;for(const o of this.intr[c.tid]){if(o.dead)continue;const d=(o.x-ns.x)**2+(o.y-ns.y)**2;if(d<bd){bd=d;best=o}}
+        if(best){toward(best.x,best.y);if(canEat(best))c.target=best}th=1}
+      else if(act==='eat'){aim(food.ex,food.ey,1);th=0.8}
+      else if(act==='return'){let tx=ns.x,ty=ns.y,bd=(ns.x-c.x)**2+(ns.y-c.y)**2;for(const f of this.fs)if(f.tid===c.tid&&f.type==='outpost'&&!f.dead){const d=(f.x-c.x)**2+(f.y-c.y)**2;if(d<bd){bd=d;tx=f.x;ty=f.y}}
+        toward(tx,ty);th=0.9;if(Math.sqrt(bd)<r+NEST_R+2&&c.m>tr.keep){ns.store+=c.m-tr.keep;c.stored+=c.m-tr.keep;this.st[c.tid].deposit+=c.m-tr.keep;c.m=tr.keep}}
+      else if(act==='raid'){let best=null,bd=1e18;for(const o of this.nests)if(o.tid!==c.tid&&o.alive){const d=(o.x-c.x)**2+(o.y-c.y)**2;if(d<bd){bd=d;best=o}}
+        if(best)toward(best.x,best.y);else roam();th=0.8}
+      else if(act==='guardNest'){const d=Math.hypot(ns.x-c.x,ns.y-c.y);if(d>NEST_R+8){toward(ns.x,ns.y);th=0.8}else th=0.05}
+      else if(act==='patrol'){if(!home)toward(ns.x,ns.y);else roam();th=0.45}
+      else if(act==='gather'){if(kin)aim(kx,ky,1);else roam();th=0.5}
+      else if(act==='spread'){aim(kx,ky,-1);th=0.6}
+      else if(act==='rest'){th=0.08}
+      else{roam();th=0.5}
+      const tgt=spd(r)*th;c.vx=c.vx*0.8+dx*tgt*0.2;c.vy=c.vy*0.8+dy*tgt*0.2;
+      const v=Math.hypot(c.vx,c.vy);if(v>0.05)c.hd=Math.atan2(c.vy,c.vx);
+      c.x+=c.vx;c.y+=c.vy;
+      if(c.x<r){c.x=r;c.vx=Math.abs(c.vx);c.hd=Math.atan2(c.vy,c.vx)}if(c.x>W-r){c.x=W-r;c.vx=-Math.abs(c.vx);c.hd=Math.atan2(c.vy,c.vx)}
+      if(c.y<r){c.y=r;c.vy=Math.abs(c.vy);c.hd=Math.atan2(c.vy,c.vx)}if(c.y>H-r){c.y=H-r;c.vy=-Math.abs(c.vy);c.hd=Math.atan2(c.vy,c.vx)}
+      {const u=upkeep(c.m,v)*(home?HOME_K:1);c.m-=u;this.st[c.tid].upkeep+=u}
+      const r2=rad(c.m);
+      // walls block weaker enemies; anything smaller than you that you touch gets eaten
+      for(const f of this.fs){if(f.dead||f.tid===c.tid)continue;const fr=FAC[f.type].r,d=Math.hypot(c.x-f.x,c.y-f.y);if(d>=fr+r2)continue;
+        if(r2>=EAT_RATIO*fr){f.dead=true;c.m+=f.m*EFF*absorb(c.m);this.st[f.tid].wreck+=f.m;this.log('wreck',c,null,f.type,f.tid)}
+        else if(f.type==='wall'){const k=(fr+r2)/(d||1);c.x=f.x+(c.x-f.x)*k;c.y=f.y+(c.y-f.y)*k}}
+      for(const o of this.nests){if(o.tid===c.tid||!o.alive||o.store<=0||this.guarded[o.tid])continue;if(Math.hypot(c.x-o.x,c.y-o.y)<r2+NEST_R){const s=Math.min(RAID*absorb(c.m),o.store);o.store-=s;c.m+=s;this.st[c.tid].stolen+=s;this.st[o.tid].lost+=s;if(this.t%25===0)this.log('raid',c,null,null,o.tid)}}
+      this.near(gp,c.x,c.y,r2,(p)=>{if(absorb(c.m)<=0)return;c.m+=p.v*absorb(c.m);p.dead=true;if(p.spot){p.spot.food=false;p.spot.next=this.t+p.spot.regrow}this.st[c.tid].food+=p.v});
+      this.near(gc,c.x,c.y,r2,(o)=>{if(o===c||o.tid===c.tid||r2<EAT_RATIO*rad(o.m))return;c.m+=o.m*EFF*absorb(c.m);o.dead=true;c.kills++;this.st[c.tid].kill+=o.m;this.st[o.tid].eaten+=o.m;this.log('kill',c,o)});
+      if(c.m<MIN_M){c.dead=true;this.growFood(c.x,c.y);this.log('starve',c)}
+    }
+    this.cs=this.cs.filter(c=>!c.dead);this.ps=this.ps.filter(p=>!p.dead);this.fs=this.fs.filter(f=>!f.dead);this.spots=this.spots.filter(sp=>!(sp.farm&&sp.farm.dead));
+    const n=this.counts().n;
+    this.nests.forEach(ns=>{if(ns.alive&&n[ns.tid]===0&&ns.store<COST.hatch){ns.alive=false;this.events.push({t:this.t,type:'extinct',tid:ns.tid})}});
+  }
+  log(type,a,b,what,tid){if(this.quiet)return;this.events.push({t:this.t,type,a:a&&{id:a.id,tid:a.tid,m:a.m},b:b&&{id:b.id,tid:b.tid,m:b.m},what,tid})}
+  counts(){const n=this.T.map(()=>0),m=this.T.map(()=>0);for(const c of this.cs){n[c.tid]++;m[c.tid]+=c.m}return{n,m}}
+  // score = everything a tribe owns: store + members + facilities
+  score(){const s=this.T.map((_,tid)=>this.nests[tid].store);for(const f of this.fs)s[f.tid]+=f.m;for(const c of this.cs)s[c.tid]+=c.m;return s}
+}
+function runMatch(tribes,seed,ticks){
+  const w=new World(seed,tribes);w.quiet=true;const acc=tribes.map(()=>0);let tot=0;
+  for(let i=0;i<ticks;i++){w.step();if(i%10===0){const s=w.score();s.forEach((v,k)=>{acc[k]+=v;tot+=v})}}
+  const s=w.score(),fin=s.reduce((a,b)=>a+b,0);
+  return{share:acc.map(v=>tot?v/tot:0),final:s.map(v=>fin?v/fin:0),alive:w.nests.map(n=>n.alive)};
+}
+
+// ================= your tribe (editor) =================
+const COLORS=['#d977e0','#ff9f43','#4fd1c5','#f25f8c','#a0a8ff','#e8e8e8'];
+const clone=o=>JSON.parse(JSON.stringify(o));
+let mine;
+try{mine=JSON.parse(localStorage.getItem('tribe-mine')||'null')}catch(e){mine=null}
+if(!mine||!mine.rules)mine=Object.assign(clone(PRESETS[0]),{name:'我的族群',style:'自创',color:COLORS[0],tpl:0});
+const save=()=>{try{localStorage.setItem('tribe-mine',JSON.stringify(mine))}catch(e){}};
+const opt=(obj,sel,blank)=>(blank?`<option value="">${blank}</option>`:'')+Object.entries(obj).map(([k,v])=>`<option value="${k}"${k===sel?' selected':''}>${v}</option>`).join('');
+function autoLabel(ru){return (ru.if.length?ru.if.map(k=>MCOND[k]).join(' 且 ')+' → ':'否则 → ')+MACT[ru.do]}
+function autoNest(ru){return (ru.if.length?ru.if.map(([k,a])=>k==='intruder'?NCOND[k]:NCOND[k]+' '+a).join(' 且 ')+' → ':'总是 → ')+NACT[ru.do]}
+function renderEditor(){
+  document.getElementById('edName').value=mine.name;
+  document.getElementById('edColor').innerHTML=COLORS.map(c=>`<option value="${c}"${c===mine.color?' selected':''} style="color:${c}">● ${c}</option>`).join('');
+  document.getElementById('edTpl').innerHTML=PRESETS.map((p,i)=>`<option value="${i}"${i===mine.tpl?' selected':''}>${p.name}（${p.style}）</option>`).join('');
+  const eR=document.getElementById('edRules');
+  eR.innerHTML=mine.rules.map((ru,i)=>`<div class="row" data-i="${i}"><span class="n">${i+1}</span><span class="w">若</span>
+    <select data-k="c0">${opt(MCOND,ru.if[0],'（无条件）')}</select><span class="w">且</span><select data-k="c1">${opt(MCOND,ru.if[1],'—')}</select>
+    <span class="w">→</span><select data-k="a">${opt(MACT,ru.do)}</select>
+    <span class="tail"><button class="icon" data-op="up" aria-label="上移">↑</button><button class="icon" data-op="down" aria-label="下移">↓</button><button class="icon" data-op="del" aria-label="删除">✕</button></span></div>`).join('');
+  const eN=document.getElementById('edNest');
+  eN.innerHTML=mine.nest.map((ru,i)=>{const c0=ru.if[0]||['',0],c1=ru.if[1]||['',0];return `<div class="row" data-i="${i}"><span class="n">${i+1}</span><span class="w">若</span>
+    <select data-k="n0">${opt(NCOND,c0[0],'（总是）')}</select><input type="number" data-k="v0" value="${c0[1]}" min="0" aria-label="数值">
+    <span class="w">且</span><select data-k="n1">${opt(NCOND,c1[0],'—')}</select><input type="number" data-k="v1" value="${c1[1]}" min="0" aria-label="数值">
+    <span class="w">→</span><select data-k="a">${opt(NACT,ru.do)}</select>
+    <span class="tail"><button class="icon" data-op="up" aria-label="上移">↑</button><button class="icon" data-op="down" aria-label="下移">↓</button><button class="icon" data-op="del" aria-label="删除">✕</button></span></div>`}).join('');
+  const c=document.getElementById('edCarry'),k=document.getElementById('edKeep');c.value=mine.carry;k.value=mine.keep;
+  document.getElementById('oCarry').textContent=mine.carry;document.getElementById('oKeep').textContent=mine.keep;
+  document.getElementById('edAddRule').disabled=mine.rules.length>=8;document.getElementById('edAddNest').disabled=mine.nest.length>=5;
+}
+function readEditor(){
+  mine.name=document.getElementById('edName').value.trim()||'我的族群';mine.color=document.getElementById('edColor').value;
+  mine.rules=[...document.querySelectorAll('#edRules .row')].map(row=>{const g=k=>row.querySelector(`[data-k="${k}"]`).value;
+    const ifs=[g('c0'),g('c1')].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i);const ru={if:ifs,do:g('a')};ru.label=autoLabel(ru);return ru});
+  mine.nest=[...document.querySelectorAll('#edNest .row')].map(row=>{const g=k=>row.querySelector(`[data-k="${k}"]`).value;
+    const ifs=[[g('n0'),+g('v0')||0],[g('n1'),+g('v1')||0]].filter(x=>x[0]);const ru={if:ifs,do:g('a')};ru.label=autoNest(ru);return ru});
+  mine.carry=+document.getElementById('edCarry').value;mine.keep=Math.min(+document.getElementById('edKeep').value,mine.carry-2);
+  save();
+}
+function edOp(list,i,op){if(op==='del')list.splice(i,1);else{const j=op==='up'?i-1:i+1;if(j<0||j>=list.length)return;[list[i],list[j]]=[list[j],list[i]]}}
+document.getElementById('editor').addEventListener('change',e=>{if(e.target.id==='edTpl')return;readEditor();renderEditor()});
+document.getElementById('editor').addEventListener('input',e=>{if(e.target.type==='range'){readEditor();document.getElementById('oCarry').textContent=mine.carry;document.getElementById('oKeep').textContent=mine.keep}});
+document.getElementById('edRules').addEventListener('click',e=>{const op=e.target.dataset.op;if(!op)return;readEditor();edOp(mine.rules,+e.target.closest('.row').dataset.i,op);mine.rules.forEach(r=>r.label=autoLabel(r));save();renderEditor()});
+document.getElementById('edNest').addEventListener('click',e=>{const op=e.target.dataset.op;if(!op)return;readEditor();edOp(mine.nest,+e.target.closest('.row').dataset.i,op);save();renderEditor()});
+document.getElementById('edAddRule').onclick=()=>{readEditor();const ru={if:['food'],do:'eat'};ru.label=autoLabel(ru);mine.rules.splice(Math.max(0,mine.rules.length-1),0,ru);save();renderEditor()};
+document.getElementById('edAddNest').onclick=()=>{readEditor();const ru={if:[['membersUnder',6]],do:'hatch'};ru.label=autoNest(ru);mine.nest.push(ru);save();renderEditor()};
+document.getElementById('edLoad').onclick=()=>{const i=+document.getElementById('edTpl').value,p=clone(PRESETS[i]);
+  mine=Object.assign(p,{name:mine.name,style:'自创',color:mine.color,tpl:i});mine.rules.forEach(r=>r.label=autoLabel(r));mine.nest.forEach(r=>r.label=autoNest(r));save();renderEditor()};
+document.getElementById('edPlay').onclick=()=>{readEditor();document.getElementById('roster').value='mine';newWorld();running=true;document.getElementById('play').textContent='暂停';document.getElementById('world').scrollIntoView({behavior:'smooth',block:'center'})};
+document.getElementById('edTest').onclick=()=>{readEditor();document.getElementById('roster').value='mine';newWorld();document.getElementById('tRun').click();document.getElementById('tAll').scrollIntoView({behavior:'smooth',block:'center'})};
+function roster(){if(document.getElementById('roster').value==='presets')return PRESETS.map(clone);
+  const others=PRESETS.filter((_,i)=>i!==mine.tpl).map(clone);return[Object.assign(clone(mine),{mine:true}),...others]}
+
+// ================= live view =================
+const cv=document.getElementById('world'),cx=cv.getContext('2d'),chart=document.getElementById('chart'),ch=chart.getContext('2d');
+let world,running=true,follow=null,hist=[],frame=0;
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const nm=o=>`<b style="color:${world.T[o.tid].color}">${world.T[o.tid].name}#${o.id}</b>`;
+const tn=tid=>`<b style="color:${world.T[tid].color}">${world.T[tid].name}</b>`;
+const FN={farm:'农田',wall:'墙',tower:'哨塔',outpost:'前哨'};
+function newWorld(){
+  const s=parseInt(document.getElementById('seed').value)||1;
+  world=new World(s,roster());follow=null;hist=[];document.getElementById('log').innerHTML='';
+  addLog(0,`新一局，种子 ${s}。每个族群 ${START_N} 名成员，巢里储量 ${START_STORE}。`);buildTribes();renderFollow();
+}
+function buildTribes(){
+  const box=document.getElementById('species');box.innerHTML='';
+  world.T.forEach((tr,i)=>{const d=document.createElement('div');d.className='sp'+(tr.mine?' mine':'');d.id='sp'+i;
+    d.innerHTML=`<div class="sp-head"><span class="dot" style="background:${tr.color}"></span><span class="sp-name">${tr.name}</span><span class="sp-kind">${tr.style}</span><span class="sp-num" id="spn${i}"></span></div>
+    <div class="bar"><i id="spb${i}" style="background:${tr.color};width:0"></i></div>
+    <div class="sub">成员性格</div>
+    <ol class="rl">${tr.rules.map((r,j)=>`<li id="r${i}_${j}"><span class="n">${j+1}</span><span>${r.label}</span><span class="h" id="rh${i}_${j}"></span></li>`).join('')}</ol>
+    <div class="sub">巢穴决策</div>
+    <ol class="rl">${tr.nest.map((r,j)=>`<li><span class="n">${j+1}</span><span>${r.label}</span><span class="h" id="nh${i}_${j}"></span></li>`).join('')}</ol>`;
+    box.appendChild(d)});
+}
+function addLog(t,msg){const L=document.getElementById('log'),p=document.createElement('div');p.innerHTML=`<span class="t">t=${t}</span>${msg}`;L.prepend(p);while(L.children.length>60)L.lastChild.remove()}
+function drainEvents(){
+  for(const ev of world.events){
+    if(ev.type==='extinct')addLog(ev.t,`<span class="flag">${world.T[ev.tid].name} 全族覆灭。</span>`);
+    else if(ev.type==='kill'){if(ev.b.m>=16||(follow&&(ev.a.id===follow||ev.b.id===follow)))addLog(ev.t,`${nm(ev.a)} 吞掉了 ${nm(ev.b)}（体量 ${ev.b.m.toFixed(0)}）`)}
+    else if(ev.type==='build')addLog(ev.t,`${tn(ev.a.tid)} 建了一座${FN[ev.what]}`);
+    else if(ev.type==='wreck')addLog(ev.t,`${nm(ev.a)} 摧毁了 ${tn(ev.tid)} 的${FN[ev.what]}`);
+    else if(ev.type==='raid')addLog(ev.t,`${nm(ev.a)} 正在偷 ${tn(ev.tid)} 的巢！`);
+    else if(follow&&ev.a&&ev.a.id===follow&&ev.type==='starve')addLog(ev.t,`${nm(ev.a)} 饿死了`);
+  }
+  world.events.length=0;
+}
+function sideUpdate(){
+  const {n}=world.counts(),sc=world.score(),tot=sc.reduce((a,b)=>a+b,0)||1;
+  world.T.forEach((tr,i)=>{
+    const f=t=>world.facCount(i,t);
+    document.getElementById('spn'+i).innerHTML=`储量 ${world.nests[i].store.toFixed(0)} · ${(100*sc[i]/tot).toFixed(0)}%<br><span style="color:var(--muted)">成员 ${n[i]} · 田${f('farm')} 墙${f('wall')} 塔${f('tower')} 哨${f('outpost')}</span>`;
+    document.getElementById('spb'+i).style.width=(100*sc[i]/tot)+'%';
+    document.getElementById('sp'+i).classList.toggle('extinct',!world.nests[i].alive);
+    const h=world.hits[i],hs=h.reduce((a,b)=>a+b,0)||1,cur=tr.rules.map(()=>0);
+    for(const c of world.cs)if(c.tid===i&&c.rule>=0)cur[c.rule]++;
+    const top=cur.indexOf(Math.max(...cur));
+    h.forEach((v,j)=>{document.getElementById(`rh${i}_${j}`).textContent=(100*v/hs).toFixed(0)+'%';document.getElementById(`r${i}_${j}`).classList.toggle('on',n[i]>0&&j===top)});
+    world.nhits[i].forEach((v,j)=>{document.getElementById(`nh${i}_${j}`).textContent=v?v+'次':''});
+  });
+  document.getElementById('tick').textContent='t='+world.t;
+}
+function renderFollow(){
+  const el=document.getElementById('follow'),c=follow&&world.cs.find(o=>o.id===follow);
+  if(!c){el.innerHTML=follow?'<span class="k">它已经不在了。点击另一个个体继续跟随。</span>':'<span class="k">点击场上任意个体，跟随它。</span>';follow=null;return}
+  const tr=world.T[c.tid];
+  el.innerHTML=`${nm(c)} <span class="k">${tr.style}</span><br><span class="k">体量</span> ${c.m.toFixed(1)} / 携带线 ${tr.carry} <span class="k">年龄</span> ${world.t-c.born}<br><span class="k">已运回</span> ${c.stored.toFixed(0)} <span class="k">吞噬</span> ${c.kills}<br><span class="k">正在执行：</span><b>规则 ${c.rule+1} · ${tr.rules[c.rule]?.label||''}</b>`;
+}
+function hex(x,y,s){cx.beginPath();for(let i=0;i<6;i++){const a=i*Math.PI/3+Math.PI/6;cx.lineTo(x+Math.cos(a)*s,y+Math.sin(a)*s)}cx.closePath()}
+function draw(){
+  const showI=document.getElementById('showIntent').checked,showS=document.getElementById('showSense').checked;
+  cx.fillStyle='#0d1714';cx.fillRect(0,0,W,H);
+  world.T.forEach((tr,i)=>{if(!world.nests[i].alive)return;for(const [a,b,rr] of world.terr(i)){cx.fillStyle=tr.color+'14';cx.beginPath();cx.arc(a,b,rr,0,6.283);cx.fill();cx.strokeStyle=tr.color+'55';cx.setLineDash([5,5]);cx.stroke();cx.setLineDash([])}});
+  cx.fillStyle='#4e9a52';for(const p of world.ps)cx.fillRect(p.x-1.5,p.y-1.5,3,3);
+  for(const f of world.fs){const col=world.T[f.tid].color,fr=FAC[f.type].r;cx.lineWidth=2;
+    if(f.type==='farm'){cx.strokeStyle=col;cx.fillStyle='#2f5e33';cx.fillRect(f.x-fr,f.y-fr,fr*2,fr*2);cx.strokeRect(f.x-fr,f.y-fr,fr*2,fr*2)}
+    else if(f.type==='wall'){cx.fillStyle='#55605a';cx.strokeStyle=col;cx.beginPath();cx.arc(f.x,f.y,fr,0,6.283);cx.fill();cx.stroke()}
+    else if(f.type==='tower'){cx.fillStyle=col;cx.beginPath();cx.moveTo(f.x,f.y-fr-2);cx.lineTo(f.x+fr,f.y+fr);cx.lineTo(f.x-fr,f.y+fr);cx.closePath();cx.fill();
+      cx.strokeStyle=col+'30';cx.lineWidth=1;cx.beginPath();cx.arc(f.x,f.y,FAC.tower.range,0,6.283);cx.stroke()}
+    else{cx.strokeStyle=col;cx.fillStyle='#0d1714';hex(f.x,f.y,fr);cx.fill();cx.stroke()}
+    cx.lineWidth=1}
+  cx.textAlign='center';cx.textBaseline='middle';
+  for(const ns of world.nests){const col=world.T[ns.tid].color;cx.globalAlpha=ns.alive?1:0.3;cx.fillStyle=col;hex(ns.x,ns.y,NEST_R+2);cx.fill();
+    cx.fillStyle='#0d1714';cx.font='bold 11px "JetBrains Mono",monospace';cx.fillText(ns.store.toFixed(0),ns.x,ns.y+1);cx.globalAlpha=1}
+  cx.textBaseline='bottom';cx.font='11px "Noto Sans SC",sans-serif';
+  const sorted=world.cs.slice().sort((a,b)=>a.m-b.m);
+  for(const c of sorted){const tr=world.T[c.tid],r=rad(c.m);
+    if(showS){cx.strokeStyle='rgba(255,255,255,0.06)';cx.beginPath();cx.arc(c.x,c.y,sen(r),0,6.283);cx.stroke()}
+    cx.fillStyle=tr.color;cx.beginPath();cx.arc(c.x,c.y,r,0,6.283);cx.fill();
+    cx.strokeStyle=c.m>=tr.carry?'#ffffff':'rgba(0,0,0,0.45)';cx.lineWidth=1.5;cx.beginPath();cx.arc(c.x,c.y,r,0,6.283);cx.stroke();cx.lineWidth=1;
+    cx.fillStyle='rgba(10,16,14,0.8)';cx.beginPath();cx.arc(c.x+Math.cos(c.hd)*r*0.55,c.y+Math.sin(c.hd)*r*0.55,Math.max(1.5,r*0.18),0,6.283);cx.fill();
+    if(showI&&!['wander','eat','patrol','rest'].includes(c.act)){cx.fillStyle=c.act==='flee'?'#ffd28a':['chase','assist','guard','defend','raid'].includes(c.act)?'#ffa08a':'rgba(230,240,235,0.85)';cx.fillText(INTENT[c.act],c.x,c.y-r-1)}
+  }
+  const f=follow&&world.cs.find(o=>o.id===follow);
+  if(f){const tr=world.T[f.tid],r=rad(f.m);cx.strokeStyle='#fff';cx.lineWidth=1.5;cx.beginPath();cx.arc(f.x,f.y,r+4,0,6.283);cx.stroke();
+    cx.setLineDash([4,4]);cx.strokeStyle='rgba(255,255,255,0.35)';cx.beginPath();cx.arc(f.x,f.y,sen(r),0,6.283);cx.stroke();cx.setLineDash([]);cx.lineWidth=1;
+    const label=tr.rules[f.rule]?.label||'';cx.font='12px "Noto Sans SC",sans-serif';const tw=cx.measureText(label).width+12;
+    cx.fillStyle='rgba(10,16,14,0.85)';cx.fillRect(f.x-tw/2,f.y-r-27,tw,18);cx.fillStyle='#fff';cx.fillText(label,f.x,f.y-r-12)}
+}
+function drawChart(){
+  const dpr=window.devicePixelRatio||1,w=chart.clientWidth,h=chart.clientHeight;
+  if(chart.width!==Math.round(w*dpr)){chart.width=Math.round(w*dpr);chart.height=Math.round(h*dpr)}
+  ch.setTransform(dpr,0,0,dpr,0,0);ch.clearRect(0,0,w,h);
+  const max=Math.max(100,...hist.flat());
+  ch.strokeStyle=css('--line');ch.fillStyle=css('--muted');ch.font='11px "JetBrains Mono",monospace';
+  for(const g of [0,0.5,1]){const y=h-14-(h-24)*g;ch.beginPath();ch.moveTo(36,y);ch.lineTo(w,y);ch.stroke();ch.fillText(String(Math.round(max*g)),2,y+4)}
+  if(hist.length<2)return;
+  world.T.forEach((tr,i)=>{ch.strokeStyle=tr.color;ch.lineWidth=tr.mine?3:2;ch.beginPath();
+    hist.forEach((row,k)=>{const x=36+(w-40)*k/(Math.max(hist.length,300)-1),y=h-14-(h-24)*row[i]/max;k?ch.lineTo(x,y):ch.moveTo(x,y)});ch.stroke()});
+}
+cv.addEventListener('click',ev=>{const b=cv.getBoundingClientRect(),x=(ev.clientX-b.left)*W/b.width,y=(ev.clientY-b.top)*H/b.height;
+  let best=null,bd=1600;for(const c of world.cs){const d=(c.x-x)**2+(c.y-y)**2;if(d<bd){bd=d;best=c}}follow=best?best.id:null;renderFollow()});
+document.getElementById('play').onclick=e=>{running=!running;e.target.textContent=running?'暂停':'继续'};
+document.getElementById('reset').onclick=()=>{const s=document.getElementById('seed');s.value=(parseInt(s.value)||0)+1;newWorld()};
+document.getElementById('seed').onchange=newWorld;document.getElementById('roster').onchange=newWorld;
+function loop(){
+  if(running){const k=parseInt(document.getElementById('speed').value);for(let i=0;i<k;i++){world.step();if(world.t%10===0){hist.push(world.score());if(hist.length>900)hist.shift()}}drainEvents()}
+  draw();if(frame++%6===0){sideUpdate();renderFollow();drawChart()}
+  requestAnimationFrame(loop);
+}
+
+// ================= batch test =================
+document.getElementById('tRun').onclick=()=>{
+  const S=Math.max(1,parseInt(document.getElementById('tSeeds').value)||5),T=Math.max(500,parseInt(document.getElementById('tTicks').value)||3000);
+  const tribes=world.T.map(clone),n=tribes.length;
+  const jobs=[];for(let s=0;s<S;s++)jobs.push({idx:tribes.map((_,i)=>i),seed:1000+s});
+  for(let a=0;a<n;a++)for(let b=a+1;b<n;b++)for(let s=0;s<S;s++)jobs.push({idx:[a,b],seed:2000+s});
+  const res=[];let i=0;const btn=document.getElementById('tRun');btn.disabled=true;
+  const step=()=>{const t0=performance.now();
+    while(i<jobs.length&&performance.now()-t0<60){const j=jobs[i];res.push({...j,...runMatch(j.idx.map(k=>tribes[k]),j.seed,T)});i++}
+    document.getElementById('tProg').style.width=(100*i/jobs.length)+'%';document.getElementById('tStatus').textContent=`已完成 ${i} / ${jobs.length} 局`;
+    if(i<jobs.length)setTimeout(step,0);else{btn.disabled=false;report(res,T,tribes)}};
+  step();
+};
+function report(res,T,tribes){
+  const n=tribes.length,all=res.filter(r=>r.idx.length===n);
+  const rows=tribes.map((tr,i)=>{let sh=0,fi=0,al=0,top=0;for(const r of all){sh+=r.share[i];fi+=r.final[i];al+=r.alive[i]?1:0;if(r.share[i]===Math.max(...r.share))top++}
+    return{tr,sh:sh/all.length,fi:fi/all.length,al:al/all.length,top}});
+  let mono=0;for(const r of all)if(Math.max(...r.final)>0.9)mono++;
+  document.getElementById('tAll').innerHTML=`<table><thead><tr><th>${n} 方混战（${all.length} 局 × ${T} 刻）</th><th>累计得分占比</th><th>终局占比</th><th>存活率</th><th>第一</th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td><span class="dot" style="vertical-align:-2px;background:${r.tr.color}"></span> ${r.tr.name}${r.tr.mine?'（你）':''}</td><td>${(100*r.sh).toFixed(1)}%</td><td>${(100*r.fi).toFixed(1)}%</td><td>${(100*r.al).toFixed(0)}%</td><td>${r.top}</td></tr>`).join('')}</tbody></table>`;
+  const M=tribes.map(()=>tribes.map(()=>null));
+  for(let a=0;a<n;a++)for(let b=a+1;b<n;b++){const rs=res.filter(r=>r.idx.length===2&&r.idx[0]===a&&r.idx[1]===b);const sa=rs.reduce((s,r)=>s+r.share[0],0)/rs.length;M[a][b]=sa;M[b][a]=1-sa}
+  document.getElementById('tPair').innerHTML=`<table><thead><tr><th>行 对 列</th>${tribes.map(s=>`<th>${s.name}</th>`).join('')}</tr></thead><tbody>${
+    tribes.map((s,a)=>`<tr><td>${s.name}</td>${M[a].map(v=>v===null?'<td>—</td>':`<td style="color:${v>0.6?'var(--accent)':v<0.4?'var(--warn)':'var(--ink)'}">${(100*v).toFixed(0)}%</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const flags=[];
+  if(mono)flags.push(`<span class="flag">单一族群独占 ${mono} 局</span>（终局占比超过 90%）`);
+  const dom=tribes.findIndex((s,a)=>M[a].every((v,b)=>b===a||v>0.6));
+  if(dom>=0)flags.push(`<span class="flag">${tribes[dom].name} 两两对决全胜</span>，可能是通吃打法`);
+  if(!flags.length)flags.push('没有发现独占或通吃。');
+  document.getElementById('tFlags').innerHTML=flags.join('<br>');
+  document.getElementById('tStatus').textContent=`完成：混战 ${all.length} 局，两两对决 ${res.length-all.length} 局。`;
+}
+renderEditor();newWorld();requestAnimationFrame(loop);
+</script>
