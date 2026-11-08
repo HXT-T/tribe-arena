@@ -84,6 +84,11 @@ th{color:var(--muted);font-weight:500}
 .row .tail{margin-left:auto;display:flex;gap:3px}
 .params{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .params input[type=range]{width:110px}
+.medals{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.medal{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--soft)}
+.medal b{margin-right:4px}
+#ledger table{font-size:12px}
+#ledger td,#ledger th{padding:3px 4px}
 .params output{font-family:var(--font-mono);font-size:12px;min-width:22px}
 </style>
 
@@ -112,7 +117,9 @@ th{color:var(--muted);font-weight:500}
     <span style="flex:1"></span>
     <button id="edPlay" class="primary">上场观战</button>
     <button id="edTest">测试强度</button>
+    <button id="edChal">挑战预设</button>
   </div>
+  <div id="medals" class="medals"></div>
   <div class="ed-grid">
     <div class="ed-col">
       <h3>成员性格</h3>
@@ -160,6 +167,7 @@ th{color:var(--muted);font-weight:500}
   <aside>
     <div id="species"></div>
     <div class="card"><h2>跟随个体</h2><div id="follow"><span class="k">点击场上任意个体，跟随它。</span></div></div>
+    <div class="card"><h2>能量账本</h2><div class="tbl" id="ledger"></div><p class="note" id="ledgerHint"></p></div>
     <div class="card"><h2>战报</h2><div id="log"></div></div>
   </aside>
 </div>
@@ -374,7 +382,11 @@ const COLORS=['#d977e0','#ff9f43','#4fd1c5','#f25f8c','#a0a8ff','#e8e8e8'];
 const clone=o=>JSON.parse(JSON.stringify(o));
 let mine;
 try{mine=JSON.parse(localStorage.getItem('tribe-mine')||'null')}catch(e){mine=null}
-if(!mine||!mine.rules)mine=Object.assign(clone(PRESETS[0]),{name:'我的族群',style:'自创',color:COLORS[0],tpl:0});
+// a deliberately plain starter: the player builds strategy on top of it
+const STARTER={name:'我的族群',style:'自创',color:COLORS[0],tpl:0,carry:20,keep:11,
+  rules:[R(['threat'],'flee','大敌靠近就逃'),R(['loaded'],'return','吃饱了就回巢'),R(['food'],'eat','吃食物'),R([],'wander','四处游荡')],
+  nest:[N([['membersUnder',6]],'hatch','成员少于 6 就孵化')]};
+if(!mine||!mine.rules)mine=clone(STARTER);
 const save=()=>{try{localStorage.setItem('tribe-mine',JSON.stringify(mine))}catch(e){}};
 const opt=(obj,sel,blank)=>(blank?`<option value="">${blank}</option>`:'')+Object.entries(obj).map(([k,v])=>`<option value="${k}"${k===sel?' selected':''}>${v}</option>`).join('');
 function autoLabel(ru){return (ru.if.length?ru.if.map(k=>MCOND[k]).join(' 且 ')+' → ':'否则 → ')+MACT[ru.do]}
@@ -423,14 +435,15 @@ function roster(){if(document.getElementById('roster').value==='presets')return 
 
 // ================= live view =================
 const cv=document.getElementById('world'),cx=cv.getContext('2d'),chart=document.getElementById('chart'),ch=chart.getContext('2d');
-let world,running=true,follow=null,hist=[],frame=0;
+let world,running=true,follow=null,hist=[],frame=0,over=false;
+const MATCH_T=3000;
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const nm=o=>`<b style="color:${world.T[o.tid].color}">${world.T[o.tid].name}#${o.id}</b>`;
 const tn=tid=>`<b style="color:${world.T[tid].color}">${world.T[tid].name}</b>`;
 const FN={farm:'农田',wall:'墙',tower:'哨塔',outpost:'前哨'};
 function newWorld(){
   const s=parseInt(document.getElementById('seed').value)||1;
-  world=new World(s,roster());follow=null;hist=[];document.getElementById('log').innerHTML='';
+  world=new World(s,roster());follow=null;hist=[];over=false;document.getElementById('log').innerHTML='';
   addLog(0,`新一局，种子 ${s}。每个族群 ${START_N} 名成员，巢里储量 ${START_STORE}。`);buildTribes();renderFollow();
 }
 function buildTribes(){
@@ -469,7 +482,8 @@ function sideUpdate(){
     h.forEach((v,j)=>{document.getElementById(`rh${i}_${j}`).textContent=(100*v/hs).toFixed(0)+'%';document.getElementById(`r${i}_${j}`).classList.toggle('on',n[i]>0&&j===top)});
     world.nhits[i].forEach((v,j)=>{document.getElementById(`nh${i}_${j}`).textContent=v?v+'次':''});
   });
-  document.getElementById('tick').textContent='t='+world.t;
+  document.getElementById('tick').textContent=`t=${world.t} / ${MATCH_T}`;
+  renderLedger();
 }
 function renderFollow(){
   const el=document.getElementById('follow'),c=follow&&world.cs.find(o=>o.id===follow);
@@ -525,10 +539,47 @@ document.getElementById('play').onclick=e=>{running=!running;e.target.textConten
 document.getElementById('reset').onclick=()=>{const s=document.getElementById('seed');s.value=(parseInt(s.value)||0)+1;newWorld()};
 document.getElementById('seed').onchange=newWorld;document.getElementById('roster').onchange=newWorld;
 function loop(){
-  if(running){const k=parseInt(document.getElementById('speed').value);for(let i=0;i<k;i++){world.step();if(world.t%10===0){hist.push(world.score());if(hist.length>900)hist.shift()}}drainEvents()}
-  draw();if(frame++%6===0){sideUpdate();renderFollow();drawChart()}
+  if(running&&!over){const k=parseInt(document.getElementById('speed').value);for(let i=0;i<k&&world.t<MATCH_T;i++){world.step();if(world.t%10===0){hist.push(world.score());if(hist.length>900)hist.shift()}}drainEvents();if(world.t>=MATCH_T)endMatch()}
+  draw();if(over)drawBanner();if(frame++%6===0){sideUpdate();renderFollow();drawChart()}
   requestAnimationFrame(loop);
 }
+
+// ================= match end, ledger, challenge =================
+function ranking(){const sc=world.score();return world.T.map((tr,i)=>({tr,i,sc:sc[i]})).sort((a,b)=>b.sc-a.sc)}
+function endMatch(){over=true;sideUpdate();const rk=ranking();
+  addLog(world.t,'<b>比赛结束。</b>'+rk.map((r,k)=>`${k+1}. ${tn(r.i)} ${r.sc.toFixed(0)}`).join('　'))}
+function drawBanner(){const rk=ranking(),h=46+rk.length*30;
+  cx.fillStyle='rgba(8,12,10,0.82)';cx.fillRect(W/2-170,H/2-h/2,340,h);cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillStyle='#fff';cx.font='bold 20px "Noto Sans SC",sans-serif';cx.fillText('比赛结束',W/2,H/2-h/2+24);
+  rk.forEach((r,k)=>{const y=H/2-h/2+56+k*30;cx.font=(r.tr.mine?'bold ':'')+'16px "Noto Sans SC",sans-serif';cx.fillStyle=r.tr.color;
+    cx.fillText(`${k+1}　${r.tr.name}${r.tr.mine?'（你）':''}　${r.sc.toFixed(0)}`,W/2,y)})}
+const LEDGER=[['food','采食'],['kill','吞噬'],['stolen','偷得'],['eaten','被吞'],['lost','被偷'],['upkeep','耗能'],['spend','投资']];
+function renderLedger(){
+  document.getElementById('ledger').innerHTML=`<table><thead><tr><th></th>${LEDGER.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>${
+    world.T.map((tr,i)=>`<tr><td style="color:${tr.color};font-weight:${tr.mine?900:500}">${tr.name}</td>${LEDGER.map(([k])=>`<td>${world.st[i][k].toFixed(0)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const mi=world.T.findIndex(t=>t.mine);if(mi<0||world.t<300){document.getElementById('ledgerHint').textContent='收入：采食、吞噬、偷得。支出：被吞、被偷、耗能。投资：花在孵化和设施上的储量。';return}
+  const st=world.st,inc=k=>st[k].food+st[k].kill*EFF+st[k].stolen,others=world.T.map((_,i)=>i).filter(i=>i!==mi);
+  const avg=f=>others.reduce((a,i)=>a+f(i),0)/others.length;
+  const cand=[
+    {gap:avg(inc)-inc(mi),msg:'收入比对手平均少，成员找食物或打猎的效率偏低。'},
+    {gap:(st[mi].eaten-avg(i=>st[i].eaten)),msg:'被吞的体量比对手多，成员太容易被大个子吃掉，考虑提前逃跑或结伴。'},
+    {gap:(st[mi].lost-avg(i=>st[i].lost)),msg:'巢被偷得比对手多，考虑留人看家或回防。'},
+    {gap:(st[mi].upkeep/Math.max(1,inc(mi))-avg(i=>st[i].upkeep/Math.max(1,inc(i))))*inc(mi),msg:'耗能占收入的比例偏高，成员跑得太多或体型太大。'}];
+  const worst=cand.sort((a,b)=>b.gap-a.gap)[0];
+  document.getElementById('ledgerHint').innerHTML=worst.gap>5?`<b>你的族群：</b>${worst.msg}`:'<b>你的族群：</b>收支和对手相当，没有明显短板。';
+}
+let medals={};try{medals=JSON.parse(localStorage.getItem('tribe-medals')||'{}')}catch(e){}
+const MEDAL=v=>v>=0.55?['金','压制']:v>=0.5?['银','胜出']:v>=0.4?['铜','抗衡']:['—','落败'];
+function renderMedals(cur){document.getElementById('medals').innerHTML=PRESETS.map(p=>{const v=cur&&cur[p.name]!==undefined?cur[p.name]:medals[p.name];
+  if(v===undefined)return `<span class="medal">对 ${p.name}：未挑战</span>`;const [m,t]=MEDAL(v);return `<span class="medal"><b>${m}</b>对 ${p.name} ${(100*v).toFixed(0)}%（${t}）</span>`}).join('')+
+  '<span class="medal" style="background:none;border:none;color:var(--muted)">挑战：一对一，6 个种子，按累计得分占比评奖；徽章记录你的最好成绩</span>'}
+document.getElementById('edChal').onclick=()=>{readEditor();const me=Object.assign(clone(mine),{mine:true}),btn=document.getElementById('edChal');btn.disabled=true;
+  const jobs=[];PRESETS.forEach(p=>{for(let s=0;s<6;s++)jobs.push({p,seed:5000+s})});const acc={};let i=0;
+  const step=()=>{const t0=performance.now();while(i<jobs.length&&performance.now()-t0<60){const j=jobs[i];acc[j.p.name]=(acc[j.p.name]||0)+runMatch([me,clone(j.p)],j.seed,3000).share[0]/6;i++}
+    btn.textContent=`挑战中 ${i}/${jobs.length}`;
+    if(i<jobs.length)setTimeout(step,0);else{for(const k in acc)if(medals[k]===undefined||acc[k]>medals[k])medals[k]=acc[k];
+      try{localStorage.setItem('tribe-medals',JSON.stringify(medals))}catch(e){}btn.disabled=false;btn.textContent='挑战预设';renderMedals(acc)}};
+  step()};
 
 // ================= batch test =================
 document.getElementById('tRun').onclick=()=>{
@@ -562,5 +613,5 @@ function report(res,T,tribes){
   document.getElementById('tFlags').innerHTML=flags.join('<br>');
   document.getElementById('tStatus').textContent=`完成：混战 ${all.length} 局，两两对决 ${res.length-all.length} 局。`;
 }
-renderEditor();newWorld();requestAnimationFrame(loop);
+renderEditor();renderMedals();newWorld();requestAnimationFrame(loop);
 </script>
